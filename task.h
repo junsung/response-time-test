@@ -35,6 +35,9 @@ class Task
     inline int getDeadline(void) { return deadline_; }
     inline Core* getCore(void) { return pCore_; }
 
+    inline void setWcet(int v) { wcet_=v; }
+    inline void setPeriod(int v) { period_=v; }
+    inline void setDeadline(int v) { deadline_=v; }
     inline void setCore(Core* c) { pCore_ = c; }
 
   private:
@@ -50,8 +53,10 @@ class Taskset
 {
   public:
     bool addTask(Task* pTask);
+    Taskset scaleTaskSet(); 
     void sortTasks();
     void sortTasksUtil();
+    bool doRBoundTest(); 
     bool doResponseTimeTest(); 
     inline std::vector<Task*> getTasks(void) { return vTasks; }
     void removeTask(Task *t) {

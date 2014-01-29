@@ -6,6 +6,46 @@
 */
 #include "task.h"
 
+Taskset Taskset::scaleTaskSet()
+{
+    Taskset scaledTaskset;
+    sortTasks();
+    unsigned int numTasks = vTasks.size();
+    unsigned int i;
+    int period, wcet, id;
+    std::string name;
+    Task* tmpTask;
+    for(i=0; i<numTasks; i++) {
+        period = vTasks.at(i)->getPeriod();
+        wcet = vTasks.at(i)->getWcet();
+        id = vTasks.at(i)->getId();
+        name = vTasks.at(i)->getName();
+        tmpTask = new Task(id, name, wcet, period, period);
+        scaledTaskset.addTask(tmpTask);
+    }
+    while((double)scaledTaskset.getTasks().at(0)->getPeriod() 
+       < (double)scaledTaskset.getTasks().at(numTasks-1)->getPeriod()/2.0) 
+    {
+        for(i=0; i<numTasks-1; i++) {
+            if(2*scaledTaskset.getTasks().at(i)->getPeriod() < scaledTaskset.getTasks().at(numTasks-1)->getPeriod()) {
+                scaledTaskset.getTasks().at(i)->setPeriod(2*scaledTaskset.getTasks().at(i)->getPeriod());
+                scaledTaskset.getTasks().at(i)->setDeadline(2*scaledTaskset.getTasks().at(i)->getDeadline());
+                scaledTaskset.getTasks().at(i)->setWcet(2*scaledTaskset.getTasks().at(i)->getWcet());
+            }
+        }
+        scaledTaskset.sortTasks();
+    }
+
+#ifdef DEBUGPRT
+    // just print for checking the results
+    printf("Results of scaleTaskSet()\n");
+    for(i=0; i<scaledTaskset.getTasks().size(); i++) {
+        printf("id: %d, wcet: %d, period: %d \n",scaledTaskset.getTasks().at(i)->getId(), scaledTaskset.getTasks().at(i)->getWcet(), scaledTaskset.getTasks().at(i)->getPeriod());
+    }
+#endif
+    return scaledTaskset;
+}
+
 void Taskset::sortTasks()
 {
     int  prevT, currT;
@@ -76,6 +116,25 @@ bool Taskset::addTask(Task* pTask) {
     vTasks.push_back(pTask);
     ret = true;
     return ret;
+}
+
+bool Taskset::doRBoundTest() 
+{
+    bool schedulability = true;
+    double numTasks = (double)vTasks.size();
+    double ratio = (double)vTasks.at(numTasks-1)->getPeriod()/vTasks.at(0)->getPeriod();
+    double rBound = (numTasks-1.0)*(pow(ratio,(1.0/(numTasks-1.0)))-1.0)+2.0/ratio-1.0;
+    double totalUtil = 0.0;
+    for(unsigned int i=0; i<numTasks; i++)
+    {
+        totalUtil += (double)vTasks.at(i)->getWcet()/vTasks.at(i)->getPeriod();
+    }
+#ifdef DEBUGPRT
+    printf("Starting the r-bound test: r-bound: %f total utilization: %f schedulability: %d ratio: %f\n", rBound, totalUtil, rBound >= totalUtil, ratio);
+#endif
+    if(totalUtil > rBound)
+        schedulability = false;
+    return schedulability;
 }
 
 bool Taskset::doResponseTimeTest() {

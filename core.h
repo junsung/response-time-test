@@ -90,6 +90,8 @@ class Coreset
     bool doFFD(Taskset* pTasks);
     bool doBFD(Taskset* pTasks);
     bool doWFD(Taskset* pTasks);
+    bool doRBoundFFD(Taskset* pTasks);
+    bool doRBoundNFD(Taskset* pTasks);
 
   private:
     int numCores_;

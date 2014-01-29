@@ -198,13 +198,124 @@ bool Coreset::doWFD(Taskset* pTasks) {
 
 }
 
+bool Coreset::doRBoundFFD(Taskset* pTasks) {
+    Taskset scaledTaskSet;
+
+    scaledTaskSet = pTasks->scaleTaskSet();
+    pTasks = &scaledTaskSet;
+
+    for(unsigned int i=0; i<pTasks->getTasks().size(); i++) {
+        unsigned int j=0;
+        for(j=0; j<vCores.size(); j++) {
+#ifdef DEBUGPRT
+            printf("Task %d is considered on Core %d.\n",pTasks->getTasks().at(i)->getId(),vCores.at(j)->getId());
+#endif
+            vCores.at(j)->bindTask(pTasks->getTasks().at(i));
+            vCores.at(j)->getTasks()->sortTasks();
+            if(vCores.at(j)->getTasks()->doRBoundTest() == false) {
+                vCores.at(j)->getTasks()->removeTask(pTasks->getTasks().at(i));
+            }
+            else {
+#ifdef DEBUGPRT
+                printf("Task %d is allocated to Core %d.\n",pTasks->getTasks().at(i)->getId(),vCores.at(j)->getId());
+#endif
+                double newUtil = vCores.at(j)->getCurUtil() + 
+                                 (double)pTasks->getTasks().at(i)->getWcet()/pTasks->getTasks().at(i)->getPeriod();
+                vCores.at(j)->setCurUtil(newUtil);
+                break;
+            }
+        }
+        if(j==vCores.size()) {
+            if(expandible_) {
+#ifdef DEBUGPRT
+                printf("One more core is added to allocate the remaining tasks.\n");
+#endif
+                setNumCores(getNumCores()+1);
+                i--;
+            }
+            else {
+#ifdef DEBUGPRT
+                printf("We cannot add more cores, so stop. The current number of cores: %d\n", getNumCores());
+#endif
+                for(unsigned int i=0; i<pTasks->getTasks().size(); i++) {
+                    delete pTasks->getTasks().at(i);
+                }
+                return false;
+            }
+        }
+    }
+
+    for(unsigned int i=0; i<pTasks->getTasks().size(); i++) {
+        delete pTasks->getTasks().at(i);
+    }
+
+    return true;
+}
+
+bool Coreset::doRBoundNFD(Taskset* pTasks) {
+    Taskset scaledTaskSet;
+
+    scaledTaskSet = pTasks->scaleTaskSet();
+    pTasks = &scaledTaskSet;
+
+    unsigned int j=0;
+    unsigned int lastCore=0;
+    for(unsigned int i=0; i<pTasks->getTasks().size(); i++) {
+        for(j=lastCore; j<vCores.size(); j++) {
+#ifdef DEBUGPRT
+            printf("Task %d is considered on Core %d.\n",pTasks->getTasks().at(i)->getId(),vCores.at(j)->getId());
+#endif
+            vCores.at(j)->bindTask(pTasks->getTasks().at(i));
+            vCores.at(j)->getTasks()->sortTasks();
+            if(vCores.at(j)->getTasks()->doRBoundTest() == false) {
+                vCores.at(j)->getTasks()->removeTask(pTasks->getTasks().at(i));
+            }
+            else {
+#ifdef DEBUGPRT
+                printf("Task %d is allocated to Core %d.\n",pTasks->getTasks().at(i)->getId(),vCores.at(j)->getId());
+#endif
+                double newUtil = vCores.at(j)->getCurUtil() + 
+                                 (double)pTasks->getTasks().at(i)->getWcet()/pTasks->getTasks().at(i)->getPeriod();
+                vCores.at(j)->setCurUtil(newUtil);
+                lastCore = j;
+                break;
+            }
+        }
+        if(j==vCores.size()) {
+            if(expandible_) {
+#ifdef DEBUGPRT
+                printf("One more core is added to allocate the remaining tasks.\n");
+#endif
+                setNumCores(getNumCores()+1);
+                lastCore = j;
+                i--;
+            }
+            else {
+#ifdef DEBUGPRT
+                printf("We cannot add more cores, so stop. The current number of cores: %d\n", getNumCores());
+#endif
+                for(unsigned int i=0; i<pTasks->getTasks().size(); i++) {
+                    delete pTasks->getTasks().at(i);
+                }
+                return false;
+            }
+        }
+    }
+
+    for(unsigned int i=0; i<pTasks->getTasks().size(); i++) {
+        delete pTasks->getTasks().at(i);
+    }
+
+    return true;
+}
+
 int main() {
     int numFFD, numBFD, numWFD;
     int numTests = 0;
     numFFD = numBFD = numWFD = 0;
     do {
         numTests++;
-        generateTaskset(50, 10, 1000, 10.0);
+        generateTaskset(100, 10, 1000, 4.0);
         Taskset taskSet;
         readTaskset(&taskSet);
         taskSet.sortTasksUtil();
@@ -217,16 +328,25 @@ int main() {
         printf("failed :'(\n");
     }
 */
-        Coreset coreSetFFD = Coreset(1,true);
+//        Coreset coreSetFFD = Coreset(1,true);
         Coreset coreSetBFD = Coreset(1,true);
         Coreset coreSetWFD = Coreset(1,true);
-        coreSetFFD.doFFD(&taskSet);
-        coreSetBFD.doBFD(&taskSet);
-        coreSetWFD.doWFD(&taskSet);
-        numFFD = coreSetFFD.getNumActiveCores();
+//        coreSetFFD.doFFD(&taskSet);
+        coreSetBFD.doRBoundFFD(&taskSet);
+        coreSetWFD.doRBoundNFD(&taskSet);
+//        numFFD = coreSetFFD.getNumActiveCores();
         numBFD = coreSetBFD.getNumActiveCores();
         numWFD = coreSetWFD.getNumActiveCores();
-    } while (numWFD == numBFD);
+        for(unsigned int i=0; i<taskSet.getTasks().size(); i++) {
+            delete taskSet.getTasks().at(i);
+        }
+        for(unsigned int i=0; i<coreSetBFD.getCores().size(); i++) {
+            delete coreSetBFD.getCores().at(i);
+        }
+        for(unsigned int i=0; i<coreSetWFD.getCores().size(); i++) {
+            delete coreSetWFD.getCores().at(i);
+        }
+    } while (numBFD <= numWFD && numTests < 1000000);
     std::cout << "Num Cores: " << numFFD;
     std::cout << " " << numBFD;
     std::cout << " " << numWFD << std::endl;
